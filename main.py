@@ -9,12 +9,15 @@ class SeatReader:
     def __init__(self):
         self.filename = None
         self.sui_list = []
+        self.sui_starts = {}
         self.user_sui_list = []
         self.vars = []
         self.graph_vars = []
         self.independent_var = None
         self.no_input = False
         self.sui_prefix = None
+        self.xAxis = {}
+        self.yAxis = {}
 
     def get_sui_list(self):
         # get the list of sui's from the input csv file
@@ -51,15 +54,15 @@ class SeatReader:
 
     def show_graph(self):
         plt.figure(figsize=(10, 10))
-        for sui in user_suis:
-            for var in user_vars:
-                plt.plot(xAxis[sui][var], yAxis[sui][var], label=sui + " " + var)
+        for sui in self.user_sui_list:
+            for var in self.graph_vars:
+                plt.plot(self.xAxis[sui][var], self.yAxis[sui][var], label=sui + " " + var)
                 # plt.xticks(np.arange(0, len(xAxis[sui][var]), 30), rotation=90)
 
                 # plt.yticks(np.arange(0, len(xAxis[sui]), 30))
-        plt.xlabel(horizontal_var)
-        if len(user_vars) == 1:
-            plt.ylabel(user_vars[0])
+        plt.xlabel(self.independent_var)
+        if len(self.graph_vars) == 1:
+            plt.ylabel(self.graph_vars[0])
         plt.legend()
         plt.show()
 
@@ -96,38 +99,38 @@ class SeatReader:
                 self.user_sui_list.append(sui)
 
     def get_data(self):
-        xAxis = {}
-        yAxis = {}
+        self.xAxis = {}
+        self.yAxis = {}
 
-        for sui in user_suis:
-            xAxis[sui] = {}
-            yAxis[sui] = {}
-            for var in user_vars:
-                xAxis[sui][var] = []
-                yAxis[sui][var] = []
+        for sui in self.user_sui_list:
+            self.xAxis[sui] = {}
+            self.yAxis[sui] = {}
+            for var in self.graph_vars:
+                self.xAxis[sui][var] = []
+                self.yAxis[sui][var] = []
 
-        with open(args.input_file, 'r') as f:
+        with open(self.filename, 'r') as f:
             for line in f:
                 line = line.split(',')
-                if line[0] in user_suis:
-                    for var in user_vars:
+                if line[0] in self.user_sui_list:
+                    for var in self.graph_vars:
                         # insert the value so that the x axis is in order
                         index = 0
                         # while index < len(xAxis[line[0]][var]) and line[variables.index(horizontal_var)] < xAxis[line[0]][var][index]:
                         #     index += 1
-                        if line[variables.index(var)] != '':
-                            xAxis[line[0]][var].insert(index, ((datetime.datetime.strptime(
-                                line[variables.index(horizontal_var)], "%Y-%m-%d %H:%M:%S") - sui_starts[
+                        if line[self.vars.index(var)] != '':
+                            self.xAxis[line[0]][var].insert(index, ((datetime.datetime.strptime(
+                                line[self.vars.index(self.independent_var)], "%Y-%m-%d %H:%M:%S") - self.sui_starts[
                                                                     line[0]]).total_seconds() / 1000) % (60 * 60 * 24))
-                            yAxis[line[0]][var].insert(index, float(line[variables.index(var)]))
+                            self.yAxis[line[0]][var].insert(index, float(line[self.vars.index(var)]))
                         # else:
                         #     yAxis[line[0]][var].insert(index, 0)
 
         # reverse the lists
-        for sui in user_suis:
-            for var in user_vars:
-                xAxis[sui][var].reverse()
-                yAxis[sui][var].reverse()
+        for sui in self.user_sui_list:
+            for var in self.graph_vars:
+                self.xAxis[sui][var].reverse()
+                self.yAxis[sui][var].reverse()
 
     def check_args(self):
         if len(self.user_sui_list) == 0:
@@ -158,9 +161,9 @@ class SeatReader:
 
         # add the prefix to any SUIs that are not in sui_list
         new_suis = []
-        for sui in user_suis:
-            if sui not in sui_list:
-                new_suis.append(sui_prefix + sui)
+        for sui in self.user_sui_list:
+            if sui not in self.sui_list:
+                new_suis.append(self.sui_prefix + sui)
             else:
                 new_suis.append(sui)
         user_suis = new_suis
@@ -172,23 +175,23 @@ class SeatReader:
 
         user_vars = []
         # check if the variables were specified
-        if args.vars is not None:
-            for var in args.vars:
-                if var not in variables:
+        if self.graph_vars is not None:
+            for var in self.graph_vars:
+                if var not in self.vars:
                     print("Variable " + var + " not found in input file.")
-                    args.vars.remove(var)
-        if args.vars is None or len(args.vars) == 0:
+                    self.graph_vars.remove(var)
+        if self.graph_vars is None or len(self.graph_vars) == 0:
             print("No variable(s) specified.")
-            if args.no_input:
+            if self.no_input:
                 exit(1)
             else:
                 print("Enter variable(s) to graph from the following options, separated by spaces:")
-                for var in variables:
+                for var in self.vars:
                     print(var)
                 while 1:
                     user_vars = input("\nEnter variable(s) to graph, separated by spaces: ").split(' ')
                     for var in user_vars:
-                        if var not in variables:
+                        if var not in self.vars:
                             print("Variable " + var + " not found in input file.")
                             # remove the variable from the list of variables to graph
                             user_vars.remove(var)
@@ -197,32 +200,29 @@ class SeatReader:
                         continue
                     else:
                         break
-        else:
-            user_vars = args.vars
 
         # print the list of variables to graph
         print("\nVariable(s) to graph:")
         for var in user_vars:
             print(var)
 
-        horizontal_var = args.x
-        if horizontal_var not in variables:
-            if args.no_input:
+        if self.independent_var not in self.vars:
+            if self.no_input:
                 exit(1)
             else:
                 print("Enter the variable to graph on the horizontal axis from the following options:")
-                for var in variables:
+                for var in self.vars:
                     print(var)
                 while 1:
-                    horizontal_var = input("\nEnter the variable to graph on the horizontal axis: ")
-                    if horizontal_var not in variables:
-                        print("Variable " + horizontal_var + " not found in input file.")
+                    self.independent_var = input("\nEnter the variable to graph on the horizontal axis: ")
+                    if self.independent_var not in self.vars:
+                        print("Variable " + self.independent_var + " not found in input file.")
                         continue
                     else:
                         break
 
         # print the variable to graph on the horizontal axis
-        print("\nVariable to graph on the horizontal axis: " + horizontal_var)
+        print("\nVariable to graph on the horizontal axis: " + self.independent_var)
 
 
 # Initialize parser
