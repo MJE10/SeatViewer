@@ -1,5 +1,5 @@
 # SeatViewer
-#### An application for reading and analyzing .csv files representing data from the toilet seat experiment
+#### An application for reading and analyzing .csv files representing data from the RIT seat experiment
 
 ---
 
