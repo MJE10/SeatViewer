@@ -18,6 +18,13 @@ class SeatReader:
         self.xAxis = {}
         self.yAxis = {}
 
+        self.get_args()
+        self.get_vars()
+        self.get_sui_list()
+        self.check_args()
+        self.get_data()
+        self.show_graph()
+
     def get_sui_list(self):
         # get the list of sui's from the input csv file
         self.sui_list = []
@@ -41,8 +48,8 @@ class SeatReader:
         self.sui_prefix = self.sui_list[0]
         for sui in self.sui_list:
             while sui[:len(self.sui_prefix)] != self.sui_prefix[:len(self.sui_prefix)]:
-                sui_prefix = self.sui_prefix[:-1]
-                if len(sui_prefix) == 0:
+                self.sui_prefix = self.sui_prefix[:-1]
+                if len(self.sui_prefix) == 0:
                     break
 
     def get_vars(self):
@@ -88,16 +95,7 @@ class SeatReader:
             self.graph_vars = arguments.vars
 
         # check if the sui's were specified
-        self.user_sui_list = []
-        if arguments.sui is not None:
-            for sui in arguments.sui:
-                if sui == 'all':
-                    self.user_sui_list = self.sui_list
-                    break
-                if sui not in self.sui_list and self.sui_prefix + sui not in self.sui_list:
-                    print("SUI " + sui + " not found in input file.")
-                    arguments.sui.remove(sui)
-                self.user_sui_list.append(sui)
+        self.user_sui_list = arguments.sui
 
     def get_data(self):
         self.xAxis = {}
@@ -115,24 +113,17 @@ class SeatReader:
                 line = line.split(',')
                 if line[0] in self.user_sui_list:
                     for var in self.graph_vars:
-                        # insert the value so that the x axis is in order
-                        index = 0
-                        # while index < len(xAxis[line[0]][var]) and line[variables.index(horizontal_var)] <
-                        # xAxis[line[0]][var][index]:
-                        #     index += 1
                         if line[self.vars.index(var)] != '':
-                            self.xAxis[line[0]][var].insert(index, ((datetime.datetime.strptime(
+                            self.xAxis[line[0]][var].append(((datetime.datetime.strptime(
                                 line[self.vars.index(self.independent_var)], "%Y-%m-%d %H:%M:%S") - self.sui_starts[
-                                                                    line[0]]).total_seconds() / 1000) % (60 * 60 * 24))
-                            self.yAxis[line[0]][var].insert(index, float(line[self.vars.index(var)]))
+                                                                    line[0]]).total_seconds()) / (60 * 60 * 24))
+                            self.yAxis[line[0]][var].append(float(line[self.vars.index(var)]))
                         # else:
                         #     yAxis[line[0]][var].insert(index, 0)
 
-        # reverse the lists
         for sui in self.user_sui_list:
             for var in self.graph_vars:
-                self.xAxis[sui][var].reverse()
-                self.yAxis[sui][var].reverse()
+                self.xAxis[sui][var], self.yAxis[sui][var] = zip(*sorted(zip(self.xAxis[sui][var], self.yAxis[sui][var])))
 
     def check_args(self):
         if len(self.user_sui_list) == 0:
@@ -168,14 +159,13 @@ class SeatReader:
                 new_suis.append(self.sui_prefix + sui)
             else:
                 new_suis.append(sui)
-        user_suis = new_suis
+        self.user_sui_list = new_suis
 
         # print the list of sui's to graph
         print("\nSUI(s) to graph:")
-        for sui in user_suis:
+        for sui in self.user_sui_list:
             print(sui)
 
-        user_vars = []
         # check if the variables were specified
         if self.graph_vars is not None:
             for var in self.graph_vars:
@@ -191,13 +181,13 @@ class SeatReader:
                 for var in self.vars:
                     print(var)
                 while 1:
-                    user_vars = input("\nEnter variable(s) to graph, separated by spaces: ").split(' ')
-                    for var in user_vars:
+                    self.graph_vars = input("\nEnter variable(s) to graph, separated by spaces: ").split(' ')
+                    for var in self.graph_vars:
                         if var not in self.vars:
                             print("Variable " + var + " not found in input file.")
                             # remove the variable from the list of variables to graph
-                            user_vars.remove(var)
-                    if len(user_vars) == 0:
+                            self.graph_vars.remove(var)
+                    if len(self.graph_vars) == 0:
                         print("No variable(s) specified.")
                         continue
                     else:
@@ -205,7 +195,7 @@ class SeatReader:
 
         # print the list of variables to graph
         print("\nVariable(s) to graph:")
-        for var in user_vars:
+        for var in self.graph_vars:
             print(var)
 
         if self.independent_var not in self.vars:
@@ -225,3 +215,18 @@ class SeatReader:
 
         # print the variable to graph on the horizontal axis
         print("\nVariable to graph on the horizontal axis: " + self.independent_var)
+
+        if self.user_sui_list is not None:
+            new_sui_list = []
+            for sui in self.user_sui_list:
+                if sui == 'all':
+                    new_sui_list = self.sui_list
+                    break
+                if sui not in self.sui_list and self.sui_prefix + sui not in self.sui_list:
+                    print("SUI " + sui + " not found in input file.")
+                new_sui_list.append(sui)
+            self.user_sui_list = new_sui_list
+
+
+if __name__ == '__main__':
+    s = SeatReader()
