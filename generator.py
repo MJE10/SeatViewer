@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import os
 import sys
 import random
@@ -130,7 +131,7 @@ def main():
 
     # write the output file
     with open(args.output_file, 'w') as f:
-        f.write('\t'.join(headers) + '\n')
+        f.write(','.join(headers) + '\n')
 
         # write 10_000 to 15_000 random records
         for i in range(random.randint(10000, 15000)):
@@ -140,8 +141,11 @@ def main():
 
             # generate a random timestamp within the user's start date and end date
             start_date = user.start_date
-            end_date = user.start_date + 60 * 60 * 24 * 365
+            end_date = user.start_date + 60 * 60 * 24 * 90
             timestamp = random.randint(start_date, end_date)
+
+            # convert timestamp to readable date
+            timestamp = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
 
             # generate a random duration between 30 and 300 seconds
             duration = random.randint(30, 300)
