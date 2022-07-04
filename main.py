@@ -5,24 +5,71 @@ import matplotlib.pyplot as plt
 
 
 class SeatReader:
+    """
+    A class that contains logic for reading the .csv files and creating a graph.
+    """
     def __init__(self):
+        """
+        Initialize attributes and call high-level methods.
+        """
+
+        """
+        The name of the input file.
+        """
         self.filename = None
 
+        """
+        The list of unique SUI's in the input file, found using the 'clinical.sui' column.
+        """
         self.sui_list = []
+        """
+        The earliest date for each SUI. Used to adjust x-axis to be relative instead of absolute, 
+        if clinical.timestamp is the independent variable.
+        """
         self.sui_starts = {}
+        """
+        The SUI's that the user wants to graph.
+        """
         self.user_sui_list = []
+        """
+        The common prefix among every SUI. The user may omit the prefix to save typing.
+        """
         self.sui_prefix = None
 
+        """
+        The list of variables available.
+        """
         self.vars = []
+        """
+        The list of variables to graph.
+        """
         self.graph_vars = []
+        """
+        The variable to graph on the horizontal axis.
+        """
         self.independent_var = None
+        """
+        The name of the variable that is unique for each SUI, usually clinical.sui.
+        """
         self.identifying_var = None
 
+        """
+        When true, the program will crash instead of asking for input via stdin.
+        """
         self.no_input = False
+        """
+        When true, the program will show missing data as red lines.
+        """
         self.show_missing = False
 
+        """
+        The list of data points for each variable for each SUI.
+        """
         self.xAxis = {}
         self.yAxis = {}
+        """
+        The list of x values where the corresponding y value is missing
+        """
         self.missing_data = []
 
         self.get_args()
@@ -33,6 +80,12 @@ class SeatReader:
         self.show_graph()
 
     def interpret_var(self, val, var_type):
+        """
+        Most variables should be interpreted as floats, but timestamps should be converted to datetime objects.
+        :param val: The value to convert
+        :param var_type: The name of the column
+        :return: The value converted to the appropriate type
+        """
         if var_type == "clinical.timestamp":
             return datetime.datetime.strptime(val, "%Y-%m-%d %H:%M:%S")
         elif var_type == "clinical.sui":
@@ -41,7 +94,10 @@ class SeatReader:
             return float(val)
 
     def get_sui_list(self):
-        # get the list of sui's from the input csv file
+        """
+        Get the list of unique SUI's from the input file, along with the earliest recorded date for each.
+        :return: None; results are stored in self.sui_list and self.sui_starts
+        """
         self.sui_list = []
         self.sui_starts = {}
         with open(self.filename, 'r') as f:
@@ -67,6 +123,10 @@ class SeatReader:
                     break
 
     def get_vars(self):
+        """
+        Get the list of variables from the input file.
+        :return: None; results are stored in self.vars
+        """
         self.vars = []
         # get the list of variables from the first line of the input csv file
         with open(self.filename, 'r') as f:
@@ -75,6 +135,10 @@ class SeatReader:
                 break
 
     def show_graph(self):
+        """
+        Create the graph and show it.
+        :return: None
+        """
         plt.figure(figsize=(10, 10))
         if self.show_missing:
             for x in self.missing_data:
@@ -89,6 +153,10 @@ class SeatReader:
         plt.show()
 
     def get_args(self):
+        """
+        Get the command line arguments.
+        :return: None; results are stored in self
+        """
         parser = argparse.ArgumentParser(description='Parses a csv file from the seats experiment.')
 
         parser.add_argument("input_file", help="The input file to parse.")
@@ -117,6 +185,10 @@ class SeatReader:
             self.user_sui_list = []
 
     def get_data(self):
+        """
+        Get the data from the input file.
+        :return: None; results are stored in self.xAxis and self.yAxis
+        """
         self.xAxis = {}
         self.yAxis = {}
 
@@ -148,6 +220,10 @@ class SeatReader:
                     zip(*sorted(zip(self.xAxis[sui][var], self.yAxis[sui][var])))
 
     def check_args(self):
+        """
+        Ensure that the user entered valid arguments; ask for more if they are needed.
+        :return: None; results are stored in self
+        """
         if len(self.user_sui_list) == 0:
             print("No SUI(s) specified.")
             if self.no_input:
