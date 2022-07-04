@@ -7,16 +7,23 @@ import matplotlib.pyplot as plt
 class SeatReader:
     def __init__(self):
         self.filename = None
+
         self.sui_list = []
         self.sui_starts = {}
         self.user_sui_list = []
+        self.sui_prefix = None
+
         self.vars = []
         self.graph_vars = []
         self.independent_var = None
+        self.identifying_var = None
+
         self.no_input = False
-        self.sui_prefix = None
+        self.show_missing = False
+
         self.xAxis = {}
         self.yAxis = {}
+        self.missing_data = []
 
         self.get_args()
         self.get_vars()
@@ -25,6 +32,14 @@ class SeatReader:
         self.get_data()
         self.show_graph()
 
+    def interpret_var(self, val, var_type):
+        if var_type == "clinical.timestamp":
+            return datetime.datetime.strptime(val, "%Y-%m-%d %H:%M:%S")
+        elif var_type == "clinical.sui":
+            return val
+        else:
+            return float(val)
+
     def get_sui_list(self):
         # get the list of sui's from the input csv file
         self.sui_list = []
@@ -32,15 +47,14 @@ class SeatReader:
         with open(self.filename, 'r') as f:
             for line_str in f:
                 line = line_str.split(',')
-                sui = line[0]
+                if line[0] == "clinical.sui":
+                    continue
+                sui = line[self.vars.index(self.identifying_var)]
+                date = self.interpret_var(line[self.vars.index(self.independent_var)], self.independent_var)
                 if sui not in self.sui_list and sui != "clinical.sui":
                     self.sui_list.append(sui)
-                    self.sui_starts[sui] = datetime.datetime.strptime(line[self.vars.index(self.independent_var)],
-                                                                      "%Y-%m-%d %H:%M:%S")
-                elif sui != "clinical.sui":
-                    self.sui_starts[sui] = min(self.sui_starts[sui],
-                                               datetime.datetime.strptime(line[self.vars.index(self.independent_var)],
-                                                                          "%Y-%m-%d %H:%M:%S"))
+                    self.sui_starts[sui] = date
+                self.sui_starts[sui] = min(self.sui_starts[sui], date)
 
         if len(self.sui_list) == 0:
             print("No SUI's found in input file. Check that it is the expected format.")
@@ -62,12 +76,12 @@ class SeatReader:
 
     def show_graph(self):
         plt.figure(figsize=(10, 10))
+        if self.show_missing:
+            for x in self.missing_data:
+                plt.axvline(x, color='r', linestyle='-')
         for sui in self.user_sui_list:
             for var in self.graph_vars:
                 plt.plot(self.xAxis[sui][var], self.yAxis[sui][var], label=sui + " " + var)
-                # plt.xticks(np.arange(0, len(xAxis[sui][var]), 30), rotation=90)
-
-                # plt.yticks(np.arange(0, len(xAxis[sui]), 30))
         plt.xlabel(self.independent_var)
         if len(self.graph_vars) == 1:
             plt.ylabel(self.graph_vars[0])
@@ -81,6 +95,8 @@ class SeatReader:
         parser.add_argument("-s", "--sui", help="The SUI(s) to graph.", nargs='+')
         parser.add_argument("-v", "--vars", help="The variable(s) to graph.", nargs='+')
         parser.add_argument("-x", help="The variable to graph on the horizontal axis.", default="clinical.timestamp")
+        parser.add_argument("-i", help="The variable that is unique for each user.", default="clinical.sui")
+        parser.add_argument("-m", help="Show missing data as red lines.", type=bool, default=False)
         parser.add_argument("--no-input", help="If appropriate options are not specified, error out instead of "
                                                "asking for standard input.")
 
@@ -89,13 +105,16 @@ class SeatReader:
         self.filename = arguments.input_file
         self.independent_var = arguments.x
         self.no_input = arguments.no_input
+        self.identifying_var = arguments.i
+        self.show_missing = arguments.m
         if arguments.sui:
             self.user_sui_list = arguments.sui
         if arguments.vars:
             self.graph_vars = arguments.vars
 
-        # check if the sui's were specified
         self.user_sui_list = arguments.sui
+        if not self.user_sui_list:
+            self.user_sui_list = []
 
     def get_data(self):
         self.xAxis = {}
@@ -111,19 +130,22 @@ class SeatReader:
         with open(self.filename, 'r') as f:
             for line in f:
                 line = line.split(',')
-                if line[0] in self.user_sui_list:
+                sui = line[0]
+                if sui in self.user_sui_list:
+                    x_val = self.interpret_var(line[self.vars.index(self.independent_var)], self.independent_var)
+                    if self.independent_var == "clinical.timestamp":
+                        x_val = (x_val - self.sui_starts[sui]).total_seconds() / (60 * 60 * 24)
                     for var in self.graph_vars:
                         if line[self.vars.index(var)] != '':
-                            self.xAxis[line[0]][var].append(((datetime.datetime.strptime(
-                                line[self.vars.index(self.independent_var)], "%Y-%m-%d %H:%M:%S") - self.sui_starts[
-                                                                    line[0]]).total_seconds()) / (60 * 60 * 24))
-                            self.yAxis[line[0]][var].append(float(line[self.vars.index(var)]))
-                        # else:
-                        #     yAxis[line[0]][var].insert(index, 0)
+                            self.xAxis[sui][var].append(x_val)
+                            self.yAxis[sui][var].append(self.interpret_var(line[self.vars.index(var)], var))
+                        else:
+                            self.missing_data.append(x_val)
 
         for sui in self.user_sui_list:
             for var in self.graph_vars:
-                self.xAxis[sui][var], self.yAxis[sui][var] = zip(*sorted(zip(self.xAxis[sui][var], self.yAxis[sui][var])))
+                self.xAxis[sui][var], self.yAxis[sui][var] = \
+                    zip(*sorted(zip(self.xAxis[sui][var], self.yAxis[sui][var])))
 
     def check_args(self):
         if len(self.user_sui_list) == 0:
