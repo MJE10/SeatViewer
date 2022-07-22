@@ -4,6 +4,30 @@ import math
 
 import matplotlib.pyplot as plt
 
+labels = {
+    "clinical.sui": "subject unique identifier",
+    "clinical.timestamp": "sit timestamp (days after first sit)",
+    "clinical.duration": "sit duration (s)",
+    "clinical.hr": "HR (bpm)",
+    "clinical.hrv": "HRV (ms)",
+    "clinical.qtc": "QTc (ms)",
+    "clinical.qrs": "QRS (ms)",
+    "clinical.spo2": "SpO2 (%)",
+    "clinical.dbp": "diastolic BP (mmHg)",
+    "clinical.sbp": "systolic BP (mmHg)",
+    "clinical.pwv": "PWV (m/s)",
+    "clinical.sv": "SV (mL)",
+    "clinical.co": "CO (L/min)",
+    "clinical.cardiac_index": "cardiac index (L/min/m^2)",
+    "clinical.sv_index": "stroke volume index (mL/m^2)",
+    "clinical.ptt": "PTT (ms)",
+    "clinical.pat": "PAT (ms)",
+    "clinical.seat_weight": "seated weight (lb)",
+    "clinical.r_peak_loc": "R-peak locations (ms)",
+    "clinical.respiration_rate": "respiration rate (breaths/min)",
+    "clinical.ecg_elec_imped": "ECG electrode impedance (ohms)",
+}
+
 
 class SeatReader:
     """
@@ -143,18 +167,24 @@ class SeatReader:
         :return: None
         """
         plt.figure(figsize=(10, 10))
-        # if self.show_missing:
-        #     for x in self.missing_data:
-        #         plt.axvline(x, color='r', linestyle='-')
         for sui in self.user_sui_list:
             for var in self.graph_vars:
-                plt.bar(self.xAxis[sui][var], self.yAxis[sui][var], label=sui + " " + var,
+                var_name = var
+                if var in labels:
+                    var_name = labels[var]
+                plt.bar(self.xAxis[sui][var], self.yAxis[sui][var], label=sui + " " + var_name,
                         yerr=self.std[sui][var], color='blue')
                 plt.bar(self.xAxis[sui][var], self.missing_data[sui][var],
-                        label=sui + " " + var + " percentage missing", color='red')
-        plt.xlabel(self.independent_var)
+                        label=sui + " " + var_name + " percentage missing", color='red')
+        if self.independent_var in labels:
+            plt.xlabel(labels[self.independent_var])
+        else:
+            plt.xlabel(self.independent_var)
         if len(self.graph_vars) == 1:
-            plt.ylabel(self.graph_vars[0])
+            if self.graph_vars[0] in labels:
+                plt.ylabel(labels[self.graph_vars[0]])
+            else:
+                plt.ylabel(self.graph_vars[0])
         plt.legend()
         plt.show()
 
