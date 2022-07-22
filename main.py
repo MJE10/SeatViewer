@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import math
 
 import matplotlib.pyplot as plt
 
@@ -67,16 +68,18 @@ class SeatReader:
         """
         self.xAxis = {}
         self.yAxis = {}
+        self.std = {}
         """
         The list of x values where the corresponding y value is missing
         """
-        self.missing_data = []
+        self.missing_data = {}
 
         self.get_args()
         self.get_vars()
         self.get_sui_list()
         self.check_args()
         self.get_data()
+        self.condense_data()
         self.show_graph()
 
     def interpret_var(self, val, var_type):
@@ -140,12 +143,15 @@ class SeatReader:
         :return: None
         """
         plt.figure(figsize=(10, 10))
-        if self.show_missing:
-            for x in self.missing_data:
-                plt.axvline(x, color='r', linestyle='-')
+        # if self.show_missing:
+        #     for x in self.missing_data:
+        #         plt.axvline(x, color='r', linestyle='-')
         for sui in self.user_sui_list:
             for var in self.graph_vars:
-                plt.plot(self.xAxis[sui][var], self.yAxis[sui][var], label=sui + " " + var)
+                plt.bar(self.xAxis[sui][var], self.yAxis[sui][var], label=sui + " " + var,
+                        yerr=self.std[sui][var], color='blue')
+                plt.bar(self.xAxis[sui][var], self.missing_data[sui][var],
+                        label=sui + " " + var + " percentage missing", color='red')
         plt.xlabel(self.independent_var)
         if len(self.graph_vars) == 1:
             plt.ylabel(self.graph_vars[0])
@@ -195,9 +201,13 @@ class SeatReader:
         for sui in self.user_sui_list:
             self.xAxis[sui] = {}
             self.yAxis[sui] = {}
+            self.missing_data[sui] = {}
+            self.std[sui] = {}
             for var in self.graph_vars:
                 self.xAxis[sui][var] = []
                 self.yAxis[sui][var] = []
+                self.missing_data[sui][var] = []
+                self.std[sui][var] = []
 
         with open(self.filename, 'r') as f:
             for line in f:
@@ -212,7 +222,7 @@ class SeatReader:
                             self.xAxis[sui][var].append(x_val)
                             self.yAxis[sui][var].append(self.interpret_var(line[self.vars.index(var)], var))
                         else:
-                            self.missing_data.append(x_val)
+                            self.missing_data[sui][var].append(x_val)
 
         for sui in self.user_sui_list:
             for var in self.graph_vars:
@@ -324,6 +334,47 @@ class SeatReader:
                     print("SUI " + sui + " not found in input file.")
                 new_sui_list.append(sui)
             self.user_sui_list = new_sui_list
+
+    def condense_data(self):
+        for sui in self.user_sui_list:
+            for var in self.graph_vars:
+                i = 0
+                new_x_axis = []
+                new_y_axis = []
+                new_std = []
+                new_missing_data = []
+
+                while 1:
+                    if i >= len(self.xAxis[sui][var]):
+                        break
+
+                    day = math.floor(self.xAxis[sui][var][i])
+                    points = [self.yAxis[sui][var][i]]
+
+                    i += 1
+                    while i < len(self.xAxis[sui][var]) and day == math.floor(self.xAxis[sui][var][i]):
+                        points.append(self.yAxis[sui][var][i])
+                        i += 1
+
+                    mean = sum(points) / len(points)
+                    variance = sum([((x - mean) ** 2) for x in points]) / len(points)
+                    res = variance ** 0.5
+
+                    count_missing = 0
+                    for missing_point in self.missing_data[sui][var]:
+                        if day == math.floor(missing_point):
+                            count_missing += 1
+                    percentage_missing = count_missing / (count_missing + len(points))
+
+                    new_x_axis.append(day)
+                    new_y_axis.append(mean)
+                    new_std.append(res)
+                    new_missing_data.append(percentage_missing * mean)
+
+                self.xAxis[sui][var] = new_x_axis
+                self.yAxis[sui][var] = new_y_axis
+                self.std[sui][var] = new_std
+                self.missing_data[sui][var] = new_missing_data
 
 
 if __name__ == '__main__':
