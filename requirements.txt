@@ -1,6 +1,7 @@
 altgraph==0.17.2
 cycler==0.11.0
 fonttools==4.33.3
+fpdf==1.7.2
 kiwisolver==1.4.3
 matplotlib==3.5.2
 numpy==1.23.0

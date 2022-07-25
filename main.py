@@ -1,8 +1,11 @@
 import argparse
 import datetime
 import math
+import os
 
 import matplotlib.pyplot as plt
+
+from fpdf import FPDF
 
 labels = {
     "clinical.sui": "subject unique identifier",
@@ -200,7 +203,8 @@ class SeatReader:
         Create the graph and show it or save as images.
         :return: None
         """
-        plt.figure(figsize=(10, 10))
+        plt.figure()
+        fig, ax = plt.subplots()
         images_paths = []
         for sui in self.user_sui_list:
             for var in self.graph_vars:
@@ -220,11 +224,26 @@ class SeatReader:
                 if self.save_pdf is None:
                     plt.show()
                 else:
-                    path = "test_" + sui + "_" + var + ".png"
-                    plt.savefig(path)
+                    plt.gca().legend().set_visible(False)
+                    path = "temp_" + sui + "_" + var + ".png"
+                    fig.set_size_inches(8, 10)
+                    plt.savefig(path, dpi=100)
                     images_paths.append(path)
                     plt.clf()
         # create PDF
+        if self.save_pdf is not None:
+            pdf = FPDF()
+            for sui in self.user_sui_list:
+                for var in self.graph_vars:
+                    var_name = var
+                    if var in labels:
+                        var_name = labels[var]
+                    pdf.add_page()
+                    pdf.set_font('Arial', 'B', 16)
+                    pdf.image("temp_" + sui + "_" + var + ".png", 8, 30, 200, 250)
+                    pdf.text(22, 35, sui + ": " + var_name)
+                    os.remove("temp_" + sui + "_" + var + ".png")
+            pdf.output(self.save_pdf)
 
     def get_args(self):
         """
