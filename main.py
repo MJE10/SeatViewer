@@ -116,6 +116,10 @@ class SeatReader:
         When true, the program will show missing data as red lines.
         """
         self.show_missing = False
+        """
+        If not None, specifies the name of the PDF where the images should be saved
+        """
+        self.save_pdf = None
 
         """
         The list of data points for each variable for each SUI.
@@ -193,10 +197,11 @@ class SeatReader:
 
     def show_graph(self):
         """
-        Create the graph and show it.
+        Create the graph and show it or save as images.
         :return: None
         """
         plt.figure(figsize=(10, 10))
+        images_paths = []
         for sui in self.user_sui_list:
             for var in self.graph_vars:
                 var_name = var
@@ -206,17 +211,20 @@ class SeatReader:
                         yerr=self.std[sui][var], color='blue')
                 plt.bar(self.xAxis[sui][var], self.missing_data[sui][var],
                         label=sui + " " + var_name + " percentage missing", color='red')
-        if self.independent_var in labels:
-            plt.xlabel(labels[self.independent_var])
-        else:
-            plt.xlabel(self.independent_var)
-        if len(self.graph_vars) == 1:
-            if self.graph_vars[0] in labels:
-                plt.ylabel(labels[self.graph_vars[0]])
-            else:
-                plt.ylabel(self.graph_vars[0])
-        plt.legend()
-        plt.show()
+                if self.independent_var in labels:
+                    plt.xlabel(labels[self.independent_var])
+                else:
+                    plt.xlabel(self.independent_var)
+                plt.ylabel(var_name)
+                plt.legend()
+                if self.save_pdf is None:
+                    plt.show()
+                else:
+                    path = "test_" + sui + "_" + var + ".png"
+                    plt.savefig(path)
+                    images_paths.append(path)
+                    plt.clf()
+        # create PDF
 
     def get_args(self):
         """
@@ -233,6 +241,7 @@ class SeatReader:
         parser.add_argument("-m", help="Show missing data as red lines.", type=bool, default=False)
         parser.add_argument("--no-input", help="If appropriate options are not specified, error out instead of "
                                                "asking for standard input.")
+        parser.add_argument("--save", help="Saves the resulting graphs to the specified PDF")
 
         arguments = parser.parse_args()
 
@@ -249,6 +258,9 @@ class SeatReader:
         self.user_sui_list = arguments.sui
         if not self.user_sui_list:
             self.user_sui_list = []
+
+        if arguments.save:
+            self.save_pdf = arguments.save
 
     def get_data(self):
         """
