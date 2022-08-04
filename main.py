@@ -6,6 +6,7 @@ import os
 import matplotlib.pyplot as plt
 
 from fpdf import FPDF
+from tqdm import tqdm
 
 labels = {
     "clinical.sui": "subject unique identifier",
@@ -110,6 +111,18 @@ class SeatReader:
         The name of the variable that is unique for each SUI, usually clinical.sui.
         """
         self.identifying_var = None
+        """
+        Samples with duration less than this value will not be included in the graph
+        """
+        self.min_duration = 3
+        """
+        When graphing HRV, the minimum duration to include, in seconds
+        """
+        self.hrv_min_duration = 60
+        """
+        For each day, values within this number of days will be included in the average
+        """
+        self.avg_window_size = 1
 
         """
         When true, the program will crash instead of asking for input via stdin.
@@ -206,7 +219,7 @@ class SeatReader:
         plt.figure()
         fig, ax = plt.subplots()
         images_paths = []
-        for sui in self.user_sui_list:
+        for sui in tqdm(self.user_sui_list):
             for var in self.graph_vars:
                 var_name = var
                 if var in labels:
@@ -227,14 +240,14 @@ class SeatReader:
                     plt.gca().legend().set_visible(False)
                     path = "temp_" + sui + "_" + var + ".png"
                     fig.set_size_inches(8, 10)
-                    plt.savefig(path, dpi=100)
+                    plt.savefig(path, dpi=300)
                     images_paths.append(path)
                     plt.clf()
         # create PDF
         if self.save_pdf is not None:
             pdf = FPDF()
-            for sui in self.user_sui_list:
-                for var in self.graph_vars:
+            for sui in tqdm(self.user_sui_list):
+                for var in tqdm(self.graph_vars):
                     var_name = var
                     if var in labels:
                         var_name = labels[var]
@@ -261,6 +274,12 @@ class SeatReader:
         parser.add_argument("--no-input", help="If appropriate options are not specified, error out instead of "
                                                "asking for standard input.")
         parser.add_argument("--save", help="Saves the resulting graphs to the specified PDF")
+        parser.add_argument("--hrv-min-duration", type=int, default=60, help="When graphing HRV, the minimum duration "
+                                                                             "to include, in seconds")
+        parser.add_argument("--avg-window-size", type=int, default=1, help="For each day, values within this number of "
+                                                                           "days will be included in the average")
+        parser.add_argument("--min-duration", type=int, default=3, help="Samples with duration less than this value "
+                                                                        "will not be included in the graph")
 
         arguments = parser.parse_args()
 
@@ -280,6 +299,15 @@ class SeatReader:
 
         if arguments.save:
             self.save_pdf = arguments.save
+
+        if arguments.hrv_min_duration:
+            self.hrv_min_duration = arguments.hrv_min_duration
+
+        if arguments.avg_window_size:
+            self.avg_window_size = arguments.avg_window_size
+
+        if arguments.min_duration:
+            self.min_duration = arguments.min_duration
 
     def get_data(self):
         """
@@ -308,7 +336,12 @@ class SeatReader:
                     x_val = self.interpret_var(line[self.vars.index(self.independent_var)], self.independent_var)
                     if self.independent_var == "clinical.timestamp":
                         x_val = (x_val - self.sui_starts[sui]).total_seconds() / (60 * 60 * 24)
+                    if float(line[self.vars.index('clinical.duration')]) < self.min_duration:
+                        continue
                     for var in self.graph_vars:
+                        if var == 'clinical.hrv' and float(line[self.vars.index('clinical.duration')]) < \
+                                self.hrv_min_duration:
+                            continue
                         if line[self.vars.index(var)] != '':
                             self.xAxis[sui][var].append(x_val)
                             self.yAxis[sui][var].append(self.interpret_var(line[self.vars.index(var)], var))
@@ -317,8 +350,9 @@ class SeatReader:
 
         for sui in self.user_sui_list:
             for var in self.graph_vars:
-                self.xAxis[sui][var], self.yAxis[sui][var] = \
-                    zip(*sorted(zip(self.xAxis[sui][var], self.yAxis[sui][var])))
+                if len(self.xAxis[sui][var]) > 0:
+                    self.xAxis[sui][var], self.yAxis[sui][var] = \
+                        zip(*sorted(zip(self.xAxis[sui][var], self.yAxis[sui][var])))
 
     def check_args(self):
         """
@@ -354,6 +388,9 @@ class SeatReader:
         # add the prefix to any SUIs that are not in sui_list
         new_suis = []
         for sui in self.user_sui_list:
+            if sui == "*":
+                new_suis = self.sui_list
+                break
             if sui not in self.sui_list:
                 new_suis.append(self.sui_prefix + sui)
             else:
@@ -435,32 +472,32 @@ class SeatReader:
                 new_std = []
                 new_missing_data = []
 
-                while 1:
-                    if i >= len(self.xAxis[sui][var]):
-                        break
+                if len(self.xAxis[sui][var]) != 0:
+                    for day in range(math.floor(self.xAxis[sui][var][-1])+1):
+                        points = []
 
-                    day = math.floor(self.xAxis[sui][var][i])
-                    points = [self.yAxis[sui][var][i]]
+                        for i in range(len(self.xAxis[sui][var])):
+                            if abs(day - math.floor(self.xAxis[sui][var][i])) <= self.avg_window_size / 2:
+                                points.append(self.yAxis[sui][var][i])
 
-                    i += 1
-                    while i < len(self.xAxis[sui][var]) and day == math.floor(self.xAxis[sui][var][i]):
-                        points.append(self.yAxis[sui][var][i])
-                        i += 1
+                        if len(points) == 0:
+                            continue
 
-                    mean = sum(points) / len(points)
-                    variance = sum([((x - mean) ** 2) for x in points]) / len(points)
-                    res = variance ** 0.5
+                        mean = sum(points) / len(points)
+                        variance = sum([((x - mean) ** 2) for x in points]) / len(points)
+                        res = variance ** 0.5
 
-                    count_missing = 0
-                    for missing_point in self.missing_data[sui][var]:
-                        if day == math.floor(missing_point):
-                            count_missing += 1
-                    percentage_missing = count_missing / (count_missing + len(points))
+                        count_missing = 0
+                        if self.show_missing:
+                            for missing_point in self.missing_data[sui][var]:
+                                if day == math.floor(missing_point):
+                                    count_missing += 1
+                        percentage_missing = count_missing / (count_missing + len(points))
 
-                    new_x_axis.append(day)
-                    new_y_axis.append(mean)
-                    new_std.append(res)
-                    new_missing_data.append(percentage_missing * mean)
+                        new_x_axis.append(day)
+                        new_y_axis.append(mean)
+                        new_std.append(res)
+                        new_missing_data.append(percentage_missing * mean)
 
                 self.xAxis[sui][var] = new_x_axis
                 self.yAxis[sui][var] = new_y_axis
