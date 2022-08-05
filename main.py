@@ -4,10 +4,15 @@ import math
 import os
 
 import matplotlib.pyplot as plt
+import io
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
 
 import img2pdf
 from PyPDF2 import PdfFileWriter, PdfFileReader
 from tqdm import tqdm
+
+import textwrap
 
 labels = {
     "clinical.sui": "subject unique identifier",
@@ -257,15 +262,50 @@ class SeatReader:
                 for var in self.graph_vars:
                     os.remove("temp_" + sui + "_" + var + ".jpg")
 
-            # add bookmarks
+            # create information page
+            packet = io.BytesIO()
+            can = canvas.Canvas(packet, pagesize=letter)
+            text = textwrap.wrap("For each patient, there are " + str(len(self.graph_vars)) +
+ " graphs: " + ', '.join(self.graph_vars) + """\n\nSamples were taken when the patient used the 
+seat, sometimes multiple times a
+day, sometimes just once, sometimes none at all. For each day, the data was averaged with an n-day
+sliding window - there is at most one bar per day, and the bar represents an average of all values in an
+n-day window centered on the day the bar is labeled. For example, with n=3, the bar at day 6 would
+include values from days 5, 6, and 7. In this calculation the timestamp for each sample is rounded down
+to the nearest day, so there are no partial days. N can be adjusted with the avg-window-size argument.
+The top of the blue bar indicates the mean value for the day. The black line on each bar indicates the
+standard deviation for the mean.\n\nHRV measurements are only counted if the sample duration is greater than
+""" + str(self.hrv_min_duration) + """ seconds, and no data is counted for samples less than """ +
+                                 str(self.min_duration) + """ seconds.""")
+            for i in range(len(text)):
+                can.drawString(60, 700-20*i, text[i])
+            can.save()
+
+            # move to the beginning of the StringIO buffer
+            packet.seek(0)
+
+            # create a new PDF with Reportlab
+            new_pdf = PdfFileReader(packet)
+
+            # add bookmarks and information page
             writer = PdfFileWriter()
+            writer.add_page(new_pdf.getPage(0))
             reader = PdfFileReader(open(self.save_pdf + ".tmp", 'rb'), strict=False)
             for page in range(reader.numPages):
                 writer.addPage(reader.getPage(page))
+            writer.addBookmark(
+                title='information',
+                pagenum=0,
+                parent=None,
+                color=None,
+                bold=True,
+                italic=False,
+                fit='/Fit',
+            )
             for sui in range(len(self.user_sui_list)):
                 bk = writer.addBookmark(
                     title='SUI ' + self.user_sui_list[sui],
-                    pagenum=len(self.graph_vars) * sui,
+                    pagenum=len(self.graph_vars) * sui + 1,
                     parent=None,
                     color=None,
                     bold=True,
@@ -275,7 +315,7 @@ class SeatReader:
                 for var in range(len(self.graph_vars)):
                     writer.addBookmark(
                         title=self.graph_vars[var],
-                        pagenum=len(self.graph_vars) * sui + var,
+                        pagenum=len(self.graph_vars) * sui + var + 1,
                         parent=bk,
                         color=None,
                         bold=True,
@@ -285,6 +325,8 @@ class SeatReader:
             output = open(self.save_pdf, 'wb')
             writer.write(output)
             output.close()
+
+            os.remove(self.save_pdf + ".tmp")
 
     def get_args(self):
         """
