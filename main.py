@@ -214,13 +214,20 @@ class SeatReader:
                 break
 
     def create_pdf_page(self, sui, var, var_name):
+        print('create pdf')
         pdf = FPDF()
+        print('add page')
         pdf.add_page()
         pdf.set_font('Arial', 'B', 16)
+        print('add image')
         pdf.image("temp_" + sui + "_" + var + ".png", 8, 30, 200, 250)
+        print('add text')
         pdf.text(22, 35, sui + ": " + var_name)
+        print('remove picture')
         os.remove("temp_" + sui + "_" + var + ".png")
+        print('output pdf')
         pdf.output("temp_" + sui + "_" + var + ".pdf")
+        print('done')
 
     def show_graph(self):
         """
@@ -256,20 +263,29 @@ class SeatReader:
                     plt.clf()
         # create PDF
         if self.save_pdf is not None:
-            for sui in tqdm(self.user_sui_list, position=0, desc='Create PDFs, SUI'):
-                for var in tqdm(self.graph_vars, position=1, desc='Create PDFs, var'):
+            threads = []
+            for sui in self.user_sui_list:
+                for var in self.graph_vars:
                     var_name = var
                     if var in labels:
                         var_name = labels[var]
+                    # threads.append(threading.Thread(target=self.create_pdf_page, args=(sui, var, var_name)))
                     self.create_pdf_page(sui, var, var_name)
+            # print('Starting threads...')
+            # for thread in threads:
+            #     thread.start()
+            # print('Joining threads...')
+            # for thread in threads:
+            #     thread.join()
+            # print('All threads joined.')
             merger = PdfMerger()
-            for sui in tqdm(self.user_sui_list, position=0, desc='Merge PDFs, SUI'):
-                for var in tqdm(self.graph_vars, position=1, desc='Merge PDFs, var'):
+            for sui in self.user_sui_list:
+                for var in self.graph_vars:
                     merger.append("temp_" + sui + "_" + var + ".pdf")
             merger.write(self.save_pdf)
             merger.close()
-            for sui in tqdm(self.user_sui_list, position=0, desc='Remove PDFs, SUI'):
-                for var in tqdm(self.graph_vars, position=1, desc='Remove PDFs, var'):
+            for sui in self.user_sui_list:
+                for var in self.graph_vars:
                     os.remove("temp_" + sui + "_" + var + ".pdf")
 
     def get_args(self):
