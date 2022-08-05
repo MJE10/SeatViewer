@@ -2,12 +2,11 @@ import argparse
 import datetime
 import math
 import os
-import threading
 
 import matplotlib.pyplot as plt
 
-from fpdf import FPDF
-from PyPDF2 import PdfMerger
+import img2pdf
+from PyPDF2 import PdfFileWriter, PdfFileReader
 from tqdm import tqdm
 
 labels = {
@@ -213,22 +212,6 @@ class SeatReader:
                 self.vars = line.split(',')
                 break
 
-    def create_pdf_page(self, sui, var, var_name):
-        print('create pdf')
-        pdf = FPDF()
-        print('add page')
-        pdf.add_page()
-        pdf.set_font('Arial', 'B', 16)
-        print('add image')
-        pdf.image("temp_" + sui + "_" + var + ".png", 8, 30, 200, 250)
-        print('add text')
-        pdf.text(22, 35, sui + ": " + var_name)
-        print('remove picture')
-        os.remove("temp_" + sui + "_" + var + ".png")
-        print('output pdf')
-        pdf.output("temp_" + sui + "_" + var + ".pdf")
-        print('done')
-
     def show_graph(self):
         """
         Create the graph and show it or save as images.
@@ -256,37 +239,52 @@ class SeatReader:
                     plt.show()
                 else:
                     plt.gca().legend().set_visible(False)
-                    path = "temp_" + sui + "_" + var + ".png"
+                    path = "temp_" + sui + "_" + var + ".jpg"
                     fig.set_size_inches(8, 10)
-                    plt.savefig(path, dpi=300)
+                    plt.title(sui + ": " + var_name)
+                    plt.savefig(path, dpi=300, transparent=False)
                     images_paths.append(path)
                     plt.clf()
         # create PDF
         if self.save_pdf is not None:
-            threads = []
+            pics = []
             for sui in self.user_sui_list:
                 for var in self.graph_vars:
-                    var_name = var
-                    if var in labels:
-                        var_name = labels[var]
-                    # threads.append(threading.Thread(target=self.create_pdf_page, args=(sui, var, var_name)))
-                    self.create_pdf_page(sui, var, var_name)
-            # print('Starting threads...')
-            # for thread in threads:
-            #     thread.start()
-            # print('Joining threads...')
-            # for thread in threads:
-            #     thread.join()
-            # print('All threads joined.')
-            merger = PdfMerger()
+                    pics.append("temp_" + sui + "_" + var + ".jpg")
+            with open(self.save_pdf + ".tmp", "wb") as f:
+                f.write(img2pdf.convert(pics))
             for sui in self.user_sui_list:
                 for var in self.graph_vars:
-                    merger.append("temp_" + sui + "_" + var + ".pdf")
-            merger.write(self.save_pdf)
-            merger.close()
-            for sui in self.user_sui_list:
-                for var in self.graph_vars:
-                    os.remove("temp_" + sui + "_" + var + ".pdf")
+                    os.remove("temp_" + sui + "_" + var + ".jpg")
+
+            # add bookmarks
+            writer = PdfFileWriter()
+            reader = PdfFileReader(open(self.save_pdf + ".tmp", 'rb'), strict=False)
+            for page in range(reader.numPages):
+                writer.addPage(reader.getPage(page))
+            for sui in range(len(self.user_sui_list)):
+                bk = writer.addBookmark(
+                    title='SUI ' + self.user_sui_list[sui],
+                    pagenum=len(self.graph_vars) * sui,
+                    parent=None,
+                    color=None,
+                    bold=True,
+                    italic=False,
+                    fit='/Fit',
+                )
+                for var in range(len(self.graph_vars)):
+                    writer.addBookmark(
+                        title=self.graph_vars[var],
+                        pagenum=len(self.graph_vars) * sui + var,
+                        parent=bk,
+                        color=None,
+                        bold=True,
+                        italic=False,
+                        fit='/Fit',
+                    )
+            output = open(self.save_pdf, 'wb')
+            writer.write(output)
+            output.close()
 
     def get_args(self):
         """
