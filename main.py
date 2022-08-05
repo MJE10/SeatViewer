@@ -2,10 +2,12 @@ import argparse
 import datetime
 import math
 import os
+import threading
 
 import matplotlib.pyplot as plt
 
 from fpdf import FPDF
+from PyPDF2 import PdfMerger
 from tqdm import tqdm
 
 labels = {
@@ -211,6 +213,15 @@ class SeatReader:
                 self.vars = line.split(',')
                 break
 
+    def create_pdf_page(self, sui, var, var_name):
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font('Arial', 'B', 16)
+        pdf.image("temp_" + sui + "_" + var + ".png", 8, 30, 200, 250)
+        pdf.text(22, 35, sui + ": " + var_name)
+        os.remove("temp_" + sui + "_" + var + ".png")
+        pdf.output("temp_" + sui + "_" + var + ".pdf")
+
     def show_graph(self):
         """
         Create the graph and show it or save as images.
@@ -219,7 +230,7 @@ class SeatReader:
         plt.figure()
         fig, ax = plt.subplots()
         images_paths = []
-        for sui in tqdm(self.user_sui_list):
+        for sui in tqdm(self.user_sui_list, desc='Create images for SUIs'):
             for var in self.graph_vars:
                 var_name = var
                 if var in labels:
@@ -245,18 +256,21 @@ class SeatReader:
                     plt.clf()
         # create PDF
         if self.save_pdf is not None:
-            pdf = FPDF()
-            for sui in tqdm(self.user_sui_list):
-                for var in tqdm(self.graph_vars):
+            for sui in tqdm(self.user_sui_list, position=0, desc='Create PDFs, SUI'):
+                for var in tqdm(self.graph_vars, position=1, desc='Create PDFs, var'):
                     var_name = var
                     if var in labels:
                         var_name = labels[var]
-                    pdf.add_page()
-                    pdf.set_font('Arial', 'B', 16)
-                    pdf.image("temp_" + sui + "_" + var + ".png", 8, 30, 200, 250)
-                    pdf.text(22, 35, sui + ": " + var_name)
-                    os.remove("temp_" + sui + "_" + var + ".png")
-            pdf.output(self.save_pdf)
+                    self.create_pdf_page(sui, var, var_name)
+            merger = PdfMerger()
+            for sui in tqdm(self.user_sui_list, position=0, desc='Merge PDFs, SUI'):
+                for var in tqdm(self.graph_vars, position=1, desc='Merge PDFs, var'):
+                    merger.append("temp_" + sui + "_" + var + ".pdf")
+            merger.write(self.save_pdf)
+            merger.close()
+            for sui in tqdm(self.user_sui_list, position=0, desc='Remove PDFs, SUI'):
+                for var in tqdm(self.graph_vars, position=1, desc='Remove PDFs, var'):
+                    os.remove("temp_" + sui + "_" + var + ".pdf")
 
     def get_args(self):
         """
