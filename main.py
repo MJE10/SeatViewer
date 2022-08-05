@@ -273,6 +273,7 @@ sliding window - there is at most one bar per day, and the bar represents an ave
 n-day window centered on the day the bar is labeled. For example, with n=3, the bar at day 6 would
 include values from days 5, 6, and 7. In this calculation the timestamp for each sample is rounded down
 to the nearest day, so there are no partial days. N can be adjusted with the avg-window-size argument.
+The value of N in this document is """ + str(self.avg_window_size) + """.
 The top of the blue bar indicates the mean value for the day. The black line on each bar indicates the
 standard deviation for the mean.\n\nHRV measurements are only counted if the sample duration is greater than
 """ + str(self.hrv_min_duration) + """ seconds, and no data is counted for samples less than """ +
