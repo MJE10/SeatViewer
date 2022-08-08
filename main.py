@@ -142,6 +142,10 @@ class SeatReader:
         If not None, specifies the name of the PDF where the images should be saved
         """
         self.save_pdf = None
+        """
+        If not None, specifies the name of the CSV where the averages should be saved
+        """
+        self.save_csv = None
 
         """
         The list of data points for each variable for each SUI.
@@ -149,6 +153,11 @@ class SeatReader:
         self.xAxis = {}
         self.yAxis = {}
         self.std = {}
+        """
+        The list of data points for each variable for each SUI compared to the duration of the sample.
+        """
+        self.durationXAxis = {}
+        self.durationYAxis = {}
         """
         The list of x values where the corresponding y value is missing
         """
@@ -217,6 +226,9 @@ class SeatReader:
                 self.vars = line.split(',')
                 break
 
+    def save_csv(self):
+        pass
+
     def show_graph(self):
         """
         Create the graph and show it or save as images.
@@ -250,17 +262,32 @@ class SeatReader:
                     plt.savefig(path, dpi=300, transparent=False)
                     images_paths.append(path)
                     plt.clf()
+                plt.scatter(self.durationXAxis[sui][var], self.durationYAxis[sui][var], label=sui + " " + var_name + " vs duration")
+                plt.xlabel('duration (s)')
+                plt.ylabel(var_name)
+                if self.save_pdf is None:
+                    plt.show()
+                else:
+                    plt.gca().legend().set_visible(False)
+                    path = "temp_duration_" + sui + "_" + var + ".jpg"
+                    fig.set_size_inches(8, 10)
+                    plt.title(sui + ": " + var_name)
+                    plt.savefig(path, dpi=300, transparent=False)
+                    images_paths.append(path)
+                    plt.clf()
         # create PDF
         if self.save_pdf is not None:
             pics = []
             for sui in self.user_sui_list:
                 for var in self.graph_vars:
                     pics.append("temp_" + sui + "_" + var + ".jpg")
+                    pics.append("temp_duration_" + sui + "_" + var + ".jpg")
             with open(self.save_pdf + ".tmp", "wb") as f:
                 f.write(img2pdf.convert(pics))
             for sui in self.user_sui_list:
                 for var in self.graph_vars:
                     os.remove("temp_" + sui + "_" + var + ".jpg")
+                    os.remove("temp_duration_" + sui + "_" + var + ".jpg")
 
             # create information page
             packet = io.BytesIO()
@@ -277,7 +304,8 @@ The value of N in this document is """ + str(self.avg_window_size) + """.
 The top of the blue bar indicates the mean value for the day. The black line on each bar indicates the
 standard deviation for the mean.\n\nHRV measurements are only counted if the sample duration is greater than
 """ + str(self.hrv_min_duration) + """ seconds, and no data is counted for samples less than """ +
-                                 str(self.min_duration) + """ seconds.""")
+                                 str(self.min_duration) + """ seconds. A scatter plot is also provided for each
+variable for each patient of the value of that variable vs the duration of the sample.""")
             for i in range(len(text)):
                 can.drawString(60, 700-20*i, text[i])
             can.save()
@@ -306,7 +334,7 @@ standard deviation for the mean.\n\nHRV measurements are only counted if the sam
             for sui in range(len(self.user_sui_list)):
                 bk = writer.addBookmark(
                     title='SUI ' + self.user_sui_list[sui],
-                    pagenum=len(self.graph_vars) * sui + 1,
+                    pagenum=len(self.graph_vars) * 2 * sui + 1,
                     parent=None,
                     color=None,
                     bold=True,
@@ -316,7 +344,7 @@ standard deviation for the mean.\n\nHRV measurements are only counted if the sam
                 for var in range(len(self.graph_vars)):
                     writer.addBookmark(
                         title=self.graph_vars[var],
-                        pagenum=len(self.graph_vars) * sui + var + 1,
+                        pagenum=len(self.graph_vars) * 2 * sui + var * 2 + 1,
                         parent=bk,
                         color=None,
                         bold=True,
@@ -345,6 +373,7 @@ standard deviation for the mean.\n\nHRV measurements are only counted if the sam
         parser.add_argument("--no-input", help="If appropriate options are not specified, error out instead of "
                                                "asking for standard input.")
         parser.add_argument("--save", help="Saves the resulting graphs to the specified PDF")
+        parser.add_argument("--save-csv", help="Saves the resulting averages to the specified CSV")
         parser.add_argument("--hrv-min-duration", type=int, default=60, help="When graphing HRV, the minimum duration "
                                                                              "to include, in seconds")
         parser.add_argument("--avg-window-size", type=int, default=1, help="For each day, values within this number of "
@@ -371,6 +400,9 @@ standard deviation for the mean.\n\nHRV measurements are only counted if the sam
         if arguments.save:
             self.save_pdf = arguments.save
 
+        if arguments.save_csv:
+            self.save_csv = arguments.save_csv
+
         if arguments.hrv_min_duration:
             self.hrv_min_duration = arguments.hrv_min_duration
 
@@ -387,15 +419,21 @@ standard deviation for the mean.\n\nHRV measurements are only counted if the sam
         """
         self.xAxis = {}
         self.yAxis = {}
+        self.durationXAxis = {}
+        self.durationYAxis = {}
 
         for sui in self.user_sui_list:
             self.xAxis[sui] = {}
             self.yAxis[sui] = {}
+            self.durationXAxis[sui] = {}
+            self.durationYAxis[sui] = {}
             self.missing_data[sui] = {}
             self.std[sui] = {}
             for var in self.graph_vars:
                 self.xAxis[sui][var] = []
                 self.yAxis[sui][var] = []
+                self.durationXAxis[sui][var] = []
+                self.durationYAxis[sui][var] = []
                 self.missing_data[sui][var] = []
                 self.std[sui][var] = []
 
@@ -416,6 +454,8 @@ standard deviation for the mean.\n\nHRV measurements are only counted if the sam
                         if line[self.vars.index(var)] != '':
                             self.xAxis[sui][var].append(x_val)
                             self.yAxis[sui][var].append(self.interpret_var(line[self.vars.index(var)], var))
+                            self.durationXAxis[sui][var].append(self.interpret_var(line[self.vars.index("clinical.duration")], var))
+                            self.durationYAxis[sui][var].append(self.interpret_var(line[self.vars.index(var)], var))
                         else:
                             self.missing_data[sui][var].append(x_val)
 
@@ -424,6 +464,8 @@ standard deviation for the mean.\n\nHRV measurements are only counted if the sam
                 if len(self.xAxis[sui][var]) > 0:
                     self.xAxis[sui][var], self.yAxis[sui][var] = \
                         zip(*sorted(zip(self.xAxis[sui][var], self.yAxis[sui][var])))
+                    self.durationXAxis[sui][var], self.durationYAxis[sui][var] = \
+                        zip(*sorted(zip(self.durationXAxis[sui][var], self.durationYAxis[sui][var])))
 
     def check_args(self):
         """
