@@ -19,7 +19,6 @@ PyQt5==5.15.7
 PyQt5-Qt5==5.15.2
 PyQt5-sip==12.11.0
 python-dateutil==2.8.2
+reportlab==3.6.11
 six==1.16.0
 tqdm==4.64.0
-
-reportlab~=3.6.11

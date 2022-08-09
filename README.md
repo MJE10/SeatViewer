@@ -3,11 +3,6 @@
 
 ---
 
-## Overview
-
-- Download binary for your platform from the release page
-- Run the application with the -h flag to see the available command line options
-
 ## Usage
 
 The file used with the program must match the expected format. If you
@@ -19,7 +14,7 @@ All other arguments are optional. Anything required to produce the graph
 will be asked in an interactive prompt. You can also use the -h flag to
 see the available command line options.
 
-## Building from source
+## Running from source
 
 Requirements:
 - Python 3
