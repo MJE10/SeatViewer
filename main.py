@@ -159,6 +159,10 @@ class SeatReader:
         self.durationXAxis = {}
         self.durationYAxis = {}
         """
+        The list of durations of samples, by SUI
+        """
+        self.general_durations = {}
+        """
         The list of x values where the corresponding y value is missing
         """
         self.missing_data = {}
@@ -169,6 +173,7 @@ class SeatReader:
         self.check_args()
         self.get_data()
         self.condense_data()
+        self.save_csv_file()
         self.show_graph()
 
     def interpret_var(self, val, var_type):
@@ -226,8 +231,23 @@ class SeatReader:
                 self.vars = line.split(',')
                 break
 
-    def save_csv(self):
-        pass
+    def save_csv_file(self):
+        if self.save_csv is not None:
+            with open(self.save_csv, "w") as f:
+                f.write(','.join(['clinical.sui', 'day'] + self.graph_vars))
+                f.write('\n')
+                for sui in self.user_sui_list:
+                    days = {}
+                    for var in self.graph_vars:
+                        for sample in range(len(self.xAxis[sui][var])):
+                            if self.xAxis[sui][var][sample] not in days:
+                                days[self.xAxis[sui][var][sample]] = {}
+                                for var2 in self.graph_vars:
+                                    days[self.xAxis[sui][var][sample]][var2] = ""
+                            days[self.xAxis[sui][var][sample]][var] = str(self.yAxis[sui][var][sample])
+                    for day in days:
+                        f.write(','.join([sui, str(day)] + [days[day][v] for v in self.graph_vars]))
+                        f.write('\n')
 
     def show_graph(self):
         """
@@ -237,6 +257,18 @@ class SeatReader:
         plt.figure()
         fig, ax = plt.subplots()
         images_paths = []
+        plt.boxplot([self.general_durations[sui] for sui in self.user_sui_list] + [self.general_durations['Combined']],
+                    labels=self.user_sui_list + ['Combined'])
+        if self.save_pdf is None:
+            plt.show()
+        else:
+            plt.gca().legend().set_visible(False)
+            path = "temp_durations.jpg"
+            fig.set_size_inches(8, 10)
+            plt.title("Sample Duration")
+            plt.savefig(path, dpi=300, transparent=False)
+            images_paths.append(path)
+            plt.clf()
         for sui in tqdm(self.user_sui_list, desc='Create images for SUIs'):
             for var in self.graph_vars:
                 var_name = var
@@ -277,7 +309,7 @@ class SeatReader:
                     plt.clf()
         # create PDF
         if self.save_pdf is not None:
-            pics = []
+            pics = ["temp_durations.jpg"]
             for sui in self.user_sui_list:
                 for var in self.graph_vars:
                     pics.append("temp_" + sui + "_" + var + ".jpg")
@@ -288,12 +320,13 @@ class SeatReader:
                 for var in self.graph_vars:
                     os.remove("temp_" + sui + "_" + var + ".jpg")
                     os.remove("temp_duration_" + sui + "_" + var + ".jpg")
+            os.remove("temp_durations.jpg")
 
             # create information page
             packet = io.BytesIO()
             can = canvas.Canvas(packet, pagesize=letter)
             text = textwrap.wrap("For each patient, there are " + str(len(self.graph_vars)) +
- " graphs: " + ', '.join(self.graph_vars) + """\n\nSamples were taken when the patient used the 
+ " graphs: " + ', '.join(self.graph_vars) + """\n\nSamples were taken when the patient used the
 seat, sometimes multiple times a
 day, sometimes just once, sometimes none at all. For each day, the data was averaged with an n-day
 sliding window - there is at most one bar per day, and the bar represents an average of all values in an
@@ -305,7 +338,11 @@ The top of the blue bar indicates the mean value for the day. The black line on 
 standard deviation for the mean.\n\nHRV measurements are only counted if the sample duration is greater than
 """ + str(self.hrv_min_duration) + """ seconds, and no data is counted for samples less than """ +
                                  str(self.min_duration) + """ seconds. A scatter plot is also provided for each
-variable for each patient of the value of that variable vs the duration of the sample.""")
+variable for each patient of the value of that variable vs the duration of the sample. The second page contains
+a boxplot of the duration of the samples (greater than """ + str(self.min_duration) + """s) for each patient
+and for all sample durations combined: The box extends from the first quartile (Q1) to the third quartile (Q3) of the
+data, with a line at the median. The whiskers extend from the box by 1.5x the inter-quartile range (IQR). Flier points
+are those past the end of the whiskers. See https://en.wikipedia.org/wiki/Box_plot for reference.""")
             for i in range(len(text)):
                 can.drawString(60, 700-20*i, text[i])
             can.save()
@@ -331,10 +368,19 @@ variable for each patient of the value of that variable vs the duration of the s
                 italic=False,
                 fit='/Fit',
             )
+            writer.addBookmark(
+                title='sample duration boxplots',
+                pagenum=1,
+                parent=None,
+                color=None,
+                bold=True,
+                italic=False,
+                fit='/Fit',
+            )
             for sui in range(len(self.user_sui_list)):
                 bk = writer.addBookmark(
                     title='SUI ' + self.user_sui_list[sui],
-                    pagenum=len(self.graph_vars) * 2 * sui + 1,
+                    pagenum=len(self.graph_vars) * 2 * sui + 2,
                     parent=None,
                     color=None,
                     bold=True,
@@ -344,7 +390,7 @@ variable for each patient of the value of that variable vs the duration of the s
                 for var in range(len(self.graph_vars)):
                     writer.addBookmark(
                         title=self.graph_vars[var],
-                        pagenum=len(self.graph_vars) * 2 * sui + var * 2 + 1,
+                        pagenum=len(self.graph_vars) * 2 * sui + var * 2 + 2,
                         parent=bk,
                         color=None,
                         bold=True,
@@ -421,12 +467,16 @@ variable for each patient of the value of that variable vs the duration of the s
         self.yAxis = {}
         self.durationXAxis = {}
         self.durationYAxis = {}
+        self.general_durations = {
+            "Combined": []
+        }
 
         for sui in self.user_sui_list:
             self.xAxis[sui] = {}
             self.yAxis[sui] = {}
             self.durationXAxis[sui] = {}
             self.durationYAxis[sui] = {}
+            self.general_durations[sui] = []
             self.missing_data[sui] = {}
             self.std[sui] = {}
             for var in self.graph_vars:
@@ -447,6 +497,8 @@ variable for each patient of the value of that variable vs the duration of the s
                         x_val = (x_val - self.sui_starts[sui]).total_seconds() / (60 * 60 * 24)
                     if float(line[self.vars.index('clinical.duration')]) < self.min_duration:
                         continue
+                    self.general_durations["Combined"].append(float(line[self.vars.index('clinical.duration')]))
+                    self.general_durations[sui].append(float(line[self.vars.index('clinical.duration')]))
                     for var in self.graph_vars:
                         if var == 'clinical.hrv' and float(line[self.vars.index('clinical.duration')]) < \
                                 self.hrv_min_duration:
